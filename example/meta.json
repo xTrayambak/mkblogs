@@ -1,0 +1,11 @@
+{
+	"title": "Tray's Ramblings",
+	"port": 8080,
+	"index": {
+		"flap": "Hiya. I'm Trayambak. I'm a systems programmer who mostly writes Nim, C and C++. I like compilers and interpreters, I guess.",
+		"contacts": {
+			"Discord": "xtrayambak",
+			"Mail": "xtrayambak (at) disroot (dot) org"
+		}
+	}
+}

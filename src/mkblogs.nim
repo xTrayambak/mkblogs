@@ -191,8 +191,12 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         headers["Server"] = "mkblogs via mummy backend"
         request.respond(200, headers = ensureMove(headers), body = buffer)
 
-      articles &= Article(title: title, path: path, creationDate: creationTimeObj)
-      pRouter[].get(path, viewer)
+      capture path:
+        let
+          splittedPath = path.split('/')
+          path = '/' & splittedPath[1 ..< splittedPath.len].join("/").changeFileExt("")
+        articles &= Article(title: title, path: path, creationDate: creationTimeObj)
+        pRouter[].get(path, viewer)
 
   move(articles)
 

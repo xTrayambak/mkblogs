@@ -70,6 +70,12 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         else:
           "Untitled Entry"
 
+      let description =
+        if renderSplitted.len > 1:
+          renderSplitted[1].removeHtmlTags()
+        else:
+          "No description can be rendered"
+
       let
         splittedPath = path.split('/')
         path = '/' & splittedPath[1 ..< splittedPath.len].join("/").changeFileExt("")
@@ -179,7 +185,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
           title,
           meta.title,
           getOpengraphTags(
-            title, meta.opengraph.title, meta.opengraph.url & '/' & path, "article"
+            title, description, meta.opengraph.url & '/' & path, "article"
           ),
           rendered,
           creationTime,

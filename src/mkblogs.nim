@@ -311,7 +311,7 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
         <p>$4</p>
         <br><br>
         <h3><strong>Contact Me</strong></h3>
-        $4
+        $5
       </div>
     </div>
   </body>

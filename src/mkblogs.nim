@@ -137,7 +137,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         $4
       </section>
       <footer>Created on <strong>$5</strong></footer>
-      <script type="module">
+      <!--<script type="module">
         // Code highlighting stuff
         import { createHighlighter } from "https://esm.sh/shiki@3.0.0?cache=1"
  
@@ -171,7 +171,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         }
 
         await highlight();
-      </script>
+      </script>-->
     </body>
   </html>
       """ %

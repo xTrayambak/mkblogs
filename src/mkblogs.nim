@@ -104,7 +104,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         margin-right: auto;
       }
 
-      h1, h2, h3, h4, h5, h6, p, footer
+      h1, h2, h3, h4, h5, h6, p, footer, li
       {
         color: #fff;
       }

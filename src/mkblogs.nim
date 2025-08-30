@@ -1,6 +1,14 @@
-import std/[algorithm, os, strutils, sugar, tables, times]
-import pkg/[jsony, mummy, mummy/routers, markdown, regex]
+import std/[algorithm, logging, os, strutils, sugar, tables, times]
+from std/posix import errno, strerror
+
+import pkg/[jsony, mummy, mummy/routers, markdown, regex, colored_logger]
 import ./[argparser]
+
+when defined(linux):
+  var PR_SET_NO_NEW_PRIVS {.importc, header: "<linux/prctl.h>".}: int32
+  proc prctl(
+    opt: int32, arg2, arg3, arg4, arg5: uint64
+  ): int32 {.importc, header: "<sys/prctl.h>".}
 
 type
   Index* = object
@@ -34,6 +42,16 @@ func removeHtmlTags(str: string): string =
 func getOpengraphTags(
     title: string, description: string, url: string, kind: string = "website"
 ): string =
+  let
+    title =
+      if title.len < 1: "No OpenGraph title was specified for this website." else: title
+
+    description =
+      if description.len < 1:
+        "If you are the owner of this site, go to `meta.json` and add the appropriate `opengraph` entries."
+      else:
+        description
+
   """
 <meta property="og:title" content="$1">
 <meta property="og:description" content="$2">
@@ -48,6 +66,8 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
   router.get(
     "/favicon.png",
     proc(request: Request) {.gcsafe.} =
+      debug "mkblogs/server: serving favicon"
+
       var headers: HttpHeaders
       headers["Content-Type"] = "image/png"
       request.respond(200, headers = ensureMove(headers), body = favicon),
@@ -59,8 +79,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
     capture path:
       let
         creationTimeObj = getCreationTime(path)
-        creationTime = creationTimeObj.format(TimeFormatVerbose)
-        modifiedTime = getLastModificationTime(path).format(TimeFormatVerbose)
+        creationTime = creationTimeObj.format(TimeFormatDisplay)
 
       let rendered = markdown(readFile(path))
       let renderSplitted = rendered.splitLines()
@@ -92,15 +111,14 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
       $3
 
       <style>
-      h1, h2, h3, h4, h5, h6,
-      footer
-      {
-        text-align: center;
-      }
+      h1 { font-weight: 800; font-size: 6.5rem; }
+      h2 { font-weight: 700; font-size: 3.5rem; }
+      h3, h4, h5, h6 { font-weight: 600; font-size: 2rem; }
 
       body
       {
-        background-color: #282828;
+        background-color: #3c3836;
+        overflow-x: hidden;
       }
 
       img
@@ -108,6 +126,15 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         display: block;
         margin-left: auto;
         margin-right: auto;
+      }
+
+      footer
+      {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        padding: 1em;
       }
 
       h1, h2, h3, h4, h5, h6, p, footer, li
@@ -124,18 +151,6 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
       }
 
       a:hover { color: white; }
-
-      code {
-      }
-
-      body pre {
-        text-align: left;
-        border-radius: 8px;
-        padding: 4px 8px;
-        margin: 0 auto;
-        width: fit-content;
-        text-align: center;
-      }
       </style>
     </head>
     <body>
@@ -143,41 +158,11 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         $4
       </section>
       <footer>Created on <strong>$5</strong></footer>
-      <!--<script type="module">
-        // Code highlighting stuff
-        import { createHighlighter } from "https://esm.sh/shiki@3.0.0?cache=1"
- 
-        async function highlight()
-        {
-          const toHighlight = document.querySelectorAll("code");
-          const highlighter = await createHighlighter(
-            {themes: ['nord'], langs: ["nim", "javascript", "c", "cpp", "rust", "json", "proto", "asm", "lua", "markdown", "makefile", "zsh"]}
-          );
-          // await highlighter.loadTheme('gruvbox-dark-hard');
-          
-          for (const elem of toHighlight)
-          {
-            const classes = Array.from(elem.classList);
-            var language = '';
 
-            for (const clazz of classes)
-            {
-              if (!clazz.startsWith("language-"))
-                continue;
-
-              language = clazz.split("language-")[1];
-            }
-            
-            if (language.length > 0)
-              elem.innerHTML = await highlighter.codeToHtml(elem.textContent, {
-                lang: language,
-                theme: 'nord'
-              })
-          }
-        }
-
-        await highlight();
-      </script>-->
+      <!-- Code highlighting stuff -->
+      <link href="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/themes/prism-tomorrow.css" rel="stylesheet" />
+      <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/prism.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-nim.min.js"></script>
     </body>
   </html>
       """ %
@@ -192,9 +177,12 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         ]
 
       proc viewer(request: Request) {.gcsafe.} =
+        debug "mkblogs/server: invoked viewer, serving content worth " & $buffer.len &
+          " bytes"
+
         var headers: HttpHeaders
         headers["Content-Type"] = "text/html; charset=UTF-8"
-        headers["Server"] = "mkblogs via mummy backend"
+        headers["Server"] = "mkblogs/mummy"
         request.respond(200, headers = ensureMove(headers), body = buffer)
 
       capture path:
@@ -215,18 +203,18 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
       <div class="entry">
         <a href="$1">
           <h3>$2</h3>
-          <h6 style="margin-top: auto;"><strong>$3</strong></h6>
         </a>
+        <h6 style="margin-top: auto;"><strong>$3</strong></h6>
       </div>
-      <br>
     """ %
       [article.path, article.title, article.creationDate.format(TimeFormatDisplay)]
 
   for contactMeth, contactInfo in meta.index.contacts:
     renderedContacts &=
       """
-        <br>
-        <h4><strong>$1</strong> — $2</h4>
+        <div class="contact-info">
+          <h4><strong>$1</strong> — $2</h4>
+        </div>
       """ %
       [contactMeth, contactInfo]
 
@@ -266,7 +254,7 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
       .entries
       {
         flex: 0 0 80%;
-        padding: 20px;
+        padding: 1rem;
         overflow-y: auto;
         background-color: #3c3836;
       }
@@ -277,7 +265,7 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
         height: 100vh;
         overflow-y: auto;
         overflow-x: hidden;
-        padding: 20px;
+        padding: 2rem;
         background-color: #32302f;
         color: #fff;
         box-sizing: border-box;
@@ -286,15 +274,35 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
 
       .entry
       {
-        margin-bottom: 15px;
-        padding: 10px;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
         background-color: #32302f;
-        border-radius: 4px;
+        border-radius: 1rem;
         display: flex;
         flex-direction: column;
-        border-radius: 8px;
+        border-radius: 1rem;
         color: #fff;
-        /* height: 200px; */
+      }
+
+      .contact-info
+      {
+        margin-top: 0.475rem;
+        margin-bottom: 0.475rem;
+      }
+
+      .flap > .title
+      {
+        margin-bottom: 1rem;
+      }
+
+      .flap > .text
+      {
+        margin-bottom: 1.5rem;
+      }
+
+      .flap > .contact-me
+      {
+        margin-bottom: 1rem;
       }
 
       a
@@ -312,11 +320,9 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
         $3
       </div>
       <div class="flap">
-        <h2>$1</h2>
-        <br>
-        <p>$4</p>
-        <br><br>
-        <h3><strong>Contact Me</strong></h3>
+        <h2 class="title">$1</h2>
+        <p class="text">$4</p>
+        <h3 class="contact-me">Contact Me</h3>
         $5
       </div>
     </div>
@@ -343,24 +349,73 @@ proc attachIndex(router: var Router, meta: Meta, articles: seq[Article]) =
   router.get("/", viewer)
 
 proc serveProject(dir: string) =
+  info "mkblogs: constructing project"
+
+  debug "mkblogs: reading project's meta.json"
   let meta = readFile(dir / "meta.json").fromJson(Meta)
+
+  debug "mkblogs: constructing blog paths and articles"
   var router: Router
   let articles = attachRouterPaths(router, dir, meta)
+
+  debug "mkblogs: done; attaching index path and page"
   attachIndex(router, meta, articles)
 
-  var server = newServer(ensureMove(router))
+  debug "mkblogs: creating HTTP server"
+  var server = newServer(
+    ensureMove(router),
+    logHandler = proc(level: common.LogLevel, args: varargs[string]) {.gcsafe.} =
+      const label = "http: "
+      var size = label.len
+      for arg in args:
+        size += arg.len + 1
 
-  echo "* mkblogs is now running on port " & $meta.port
+      dec size
+
+      var msg = newStringOfCap(ensureMove(size))
+      msg &= label
+      for i, arg in args:
+        msg &= arg
+        if i < args.len - 1:
+          msg &= ' '
+
+      case level
+      of DebugLevel:
+        debug ensureMove(msg)
+      of InfoLevel:
+        info ensureMove(msg)
+      of ErrorLevel:
+        error ensureMove(msg)
+    ,
+  )
+
+  info "mkblogs: now serving a project on port " & $meta.port
   server.serve(Port(meta.port), "0.0.0.0")
 
+proc installSandbox() =
+  when defined(linux):
+    debug "sandbox: enabling NoNewPrivs"
+    if prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
+      error "sandbox: failed to enable NoNewPrivs: " & $strerror(errno)
+  else:
+    warn "sandbox: mkblogs does not attempt to harden itself on your platform. Just keep that in mind."
+
 proc main() {.inline.} =
+  addHandler(newColoredLogger())
+  setLogFilter(lvlInfo)
+
   var input = parseInput()
+  if input.enabled("verbose", "v"):
+    setLogFilter(lvlAll)
+
   case input.command
   of "serve":
     let dir = input.arguments[0]
+    installSandbox()
     serveProject(dir)
   else:
-    quit "Invalid mode: " & input.command
+    error "mkblogs: invalid mode: " & input.command
+    quit(1)
 
 when isMainModule:
   main()

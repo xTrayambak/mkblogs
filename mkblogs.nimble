@@ -14,4 +14,5 @@ requires "markdown >= 0.8.8"
 requires "mummy >= 0.4.7"
 requires "jsony >= 1.1.5"
 requires "regex >= 0.26.3"
+requires "colored_logger >= 0.1.0"
 

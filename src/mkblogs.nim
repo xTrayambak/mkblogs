@@ -66,8 +66,6 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
   router.get(
     "/favicon.png",
     proc(request: Request) {.gcsafe.} =
-      debug "mkblogs/server: serving favicon"
-
       var headers: HttpHeaders
       headers["Content-Type"] = "image/png"
       request.respond(200, headers = ensureMove(headers), body = favicon),
@@ -177,9 +175,6 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
         ]
 
       proc viewer(request: Request) {.gcsafe.} =
-        debug "mkblogs/server: invoked viewer, serving content worth " & $buffer.len &
-          " bytes"
-
         var headers: HttpHeaders
         headers["Content-Type"] = "text/html; charset=UTF-8"
         headers["Server"] = "mkblogs/mummy"

@@ -128,11 +128,7 @@ proc attachRouterPaths(router: var Router, dir: string, meta: Meta): seq[Article
 
       footer
       {
-        position: absolute;
-        bottom: 0;
-        width: 100%;
         text-align: center;
-        padding: 1em;
       }
 
       h1, h2, h3, h4, h5, h6, p, footer, li
